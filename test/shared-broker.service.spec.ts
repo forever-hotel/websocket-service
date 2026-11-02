@@ -32,7 +32,7 @@ function fixture() {
   };
   jest.mocked(connect).mockResolvedValue(connection as unknown as ChannelModel);
   const deliver = jest.fn();
-  const broker = new SharedBroker({ deliver } as unknown as SharedGateway);
+  const broker = new SharedBroker({ deliver, setBrokerReady: jest.fn() } as unknown as SharedGateway);
   const message = (name = 'room.status.changed', extra: object = {}) =>
     ({
       content: Buffer.from(JSON.stringify({ subsystem: 'mad', name, privateData: 'never forward', ...extra })),
@@ -77,6 +77,26 @@ describe('standalone broker subscription', () => {
       expect(f.deliver).toHaveBeenLastCalledWith('mad', 'rooms.transport.status', { healthy: true });
       f.receive(f.message('rooms.transport.status', { healthy: 'untrusted' }));
       expect(f.deliver).toHaveBeenLastCalledWith('mad', 'rooms.transport.status', { healthy: false });
+    } finally {
+      await f.broker.onModuleDestroy();
+    }
+  });
+
+  it('maps FDS/WMS changes to authorized MAD and FDS refresh events', async () => {
+    const f = fixture();
+    try {
+      await f.broker.attach();
+      const room = f.message('room.status.updated', { subsystem: 'fds' });
+      room.fields.routingKey = 'fds.room.status.updated';
+      f.receive(room);
+      expect(f.deliver).toHaveBeenCalledWith('mad', 'room.status.changed', { changed: true });
+      expect(f.deliver).toHaveBeenCalledWith('mad', 'analytics.changed', { changed: true });
+      const task = f.message('task.completed', { subsystem: 'wkms' });
+      task.fields.routingKey = 'wkms.task.completed';
+      f.receive(task);
+      expect(f.deliver).toHaveBeenCalledWith('fds', 'task.changed', { changed: true });
+      expect(f.deliver).toHaveBeenCalledWith('mad', 'task.changed', { changed: true });
+      expect(JSON.stringify(f.deliver.mock.calls)).not.toContain('never forward');
     } finally {
       await f.broker.onModuleDestroy();
     }

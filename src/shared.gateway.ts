@@ -27,6 +27,7 @@ export class SharedGateway implements OnGatewayInit, OnModuleDestroy {
   private status = new Map<string, { data: unknown; at: number }>();
   private timer?: ReturnType<typeof setInterval>;
   private checking = false;
+  private brokerReady = false;
 
   constructor(private readonly auth: SharedAuthService) {}
 
@@ -82,6 +83,7 @@ export class SharedGateway implements OnGatewayInit, OnModuleDestroy {
       const client = this.clients.get(socket);
 
       if (!client) return socket.disconnect(true);
+      socket.emit('realtime.status', { healthy: this.brokerReady });
       for (const [name, channel] of Object.entries(eventChannels)) {
         if (!name.endsWith('transport.status') || !client.channels.includes(channel)) continue;
         const saved = this.status.get(client.subsystem + ':' + name);
@@ -142,6 +144,11 @@ export class SharedGateway implements OnGatewayInit, OnModuleDestroy {
     } finally {
       this.checking = false;
     }
+  }
+
+  setBrokerReady(healthy: boolean) {
+    this.brokerReady = healthy;
+    for (const socket of this.clients.keys()) socket.emit('realtime.status', { healthy });
   }
 
   deliver(subsystem: string, name: string, data: unknown) {

@@ -27,18 +27,22 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
       this.connection = connection;
       connection.on('error', () => {
         this.ready = false;
+        this.gateway.setBrokerReady(false);
       });
       connection.on('close', () => {
         this.ready = false;
+        this.gateway.setBrokerReady(false);
         this.schedule();
       });
       const channel = await connection.createChannel();
 
       channel.on('error', () => {
         this.ready = false;
+        this.gateway.setBrokerReady(false);
       });
       channel.on('close', () => {
         this.ready = false;
+        this.gateway.setBrokerReady(false);
         void connection.close().catch(() => undefined);
       });
       await channel.assertExchange(REALTIME_EXCHANGE, 'topic', { durable: true });
@@ -69,16 +73,35 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
             event.name,
             event.name.endsWith('transport.status') ? { healthy: event.healthy === true } : { changed: true }
           );
+          // Cross-system invalidations still re-fetch through each owner's authorized REST API.
+          if (event.subsystem === 'fds' && event.name === 'room.status.updated') {
+            this.deliverIfConfigured('mad', 'room.status.changed', { changed: true });
+            this.deliverIfConfigured('mad', 'analytics.changed', { changed: true });
+          }
+          if (event.subsystem === 'wkms' && event.name.startsWith('task.')) {
+            this.deliverIfConfigured('mad', 'task.changed', { changed: true });
+            this.deliverIfConfigured('fds', 'task.changed', { changed: true });
+          }
           channel.ack(message);
         } catch {
           channel.nack(message, false, false);
         }
       });
       this.ready = true;
+      this.gateway.setBrokerReady(true);
     } catch {
       this.ready = false;
+      this.gateway.setBrokerReady(false);
       await this.connection?.close().catch(() => undefined);
       this.schedule();
+    }
+  }
+
+  private deliverIfConfigured(subsystem: string, name: string, data: unknown) {
+    try {
+      this.gateway.deliver(subsystem, name, data);
+    } catch {
+      /* Optional subsystem is not configured. */
     }
   }
 
