@@ -8,10 +8,10 @@ RUN npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
-ENV NODE_ENV=production PORT=4700
+ENV NODE_ENV=production PORT=8081
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 COPY --from=build --chown=node:node /app/dist ./dist
 USER node
-EXPOSE 4700
+EXPOSE 8081
 CMD ["node", "dist/main.js"]
