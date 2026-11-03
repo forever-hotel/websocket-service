@@ -1,10 +1,11 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { connect, type ChannelModel } from 'amqplib';
 import { SharedGateway } from './shared.gateway';
 import { eventChannels, REALTIME_EXCHANGE } from './contracts';
 
 @Injectable()
 export class SharedBroker implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(SharedBroker.name);
   private connection?: ChannelModel;
   private timer?: ReturnType<typeof setTimeout>;
   private stopped = false;
@@ -26,6 +27,7 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
       }
       this.connection = connection;
       connection.on('error', () => {
+        this.logger.warn({ event: 'broker_connection_error' });
         this.ready = false;
         this.gateway.setBrokerReady(false);
       });
@@ -37,6 +39,7 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
       const channel = await connection.createChannel();
 
       channel.on('error', () => {
+        this.logger.warn({ event: 'broker_channel_error' });
         this.ready = false;
         this.gateway.setBrokerReady(false);
       });
@@ -87,9 +90,11 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
           channel.nack(message, false, false);
         }
       });
+      this.logger.log({ event: 'broker_connected' });
       this.ready = true;
       this.gateway.setBrokerReady(true);
     } catch {
+      this.logger.warn({ event: 'broker_connection_unavailable', retryMs: 3000 });
       this.ready = false;
       this.gateway.setBrokerReady(false);
       await this.connection?.close().catch(() => undefined);
