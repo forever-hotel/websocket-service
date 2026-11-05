@@ -66,6 +66,7 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
             subsystem: string;
             name: string;
             healthy?: boolean;
+            data?: unknown;
           };
 
           if (!eventChannels[event.name] || message.fields.routingKey !== event.subsystem + '.' + event.name)
@@ -74,7 +75,11 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
           this.gateway.deliver(
             event.subsystem,
             event.name,
-            event.name.endsWith('transport.status') ? { healthy: event.healthy === true } : { changed: true }
+            event.subsystem === 'foss' && event.name === 'guest.event'
+              ? event.data
+              : event.name.endsWith('transport.status')
+                ? { healthy: event.healthy === true }
+                : { changed: true }
           );
           // Cross-system invalidations still re-fetch through each owner's authorized REST API.
           if (event.subsystem === 'fds' && event.name === 'room.status.updated') {
@@ -82,9 +87,12 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
             this.deliverIfConfigured('mad', 'analytics.changed', { changed: true });
           }
           if (event.subsystem === 'wkms' && event.name.startsWith('task.')) {
+            this.deliverIfConfigured('foss', 'guest.refresh', { changed: true });
             this.deliverIfConfigured('mad', 'task.changed', { changed: true });
             this.deliverIfConfigured('fds', 'task.changed', { changed: true });
           }
+          if (event.subsystem === 'mad' && event.name === 'notifications.changed')
+            this.deliverIfConfigured('foss', 'guest.refresh', { changed: true });
           channel.ack(message);
         } catch {
           channel.nack(message, false, false);

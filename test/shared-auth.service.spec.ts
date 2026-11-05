@@ -23,6 +23,25 @@ describe('Shared subsystem registry and authentication', () => {
   it('accepts explicit valid subsystem permissions', () => {
     expect(loadSubsystems(JSON.stringify({ mad: system })).mad.relayKey).toBe(key);
   });
+  it('requires a booking and room from the authenticated FOSS guest session', async () => {
+    process.env.WEBSOCKET_SUBSYSTEMS_JSON = JSON.stringify({ foss: { ...system, roles: { GUEST: ['guest'] } } });
+    const body = {
+      sub: 'session',
+      role: 'GUEST',
+      bookingId: 'booking',
+      roomNumber: '101',
+      expiresAt: 4102444800,
+      passwordChangeRequired: false
+    };
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify(body)));
+    expect(await new SharedAuthService().session('private', 'foss')).toMatchObject({
+      bookingId: 'booking',
+      roomNumber: '101',
+      channels: ['guest']
+    });
+    global.fetch = jest.fn().mockResolvedValue(new Response(JSON.stringify({ ...body, bookingId: undefined })));
+    await expect(new SharedAuthService().session('private', 'foss')).rejects.toMatchObject({ status: 401 });
+  });
   it.each([
     'null',
     '[]',

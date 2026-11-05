@@ -153,6 +153,18 @@ export class SharedGateway implements OnGatewayInit, OnModuleDestroy {
 
   deliver(subsystem: string, name: string, data: unknown) {
     const channel = eventChannels[name];
+    const stay = data as { bookingId?: unknown; roomNumber?: unknown } | null;
+    if (
+      subsystem === 'foss' &&
+      name !== 'guest.refresh' &&
+      (name !== 'guest.event' ||
+        !stay ||
+        typeof stay.bookingId !== 'string' ||
+        !stay.bookingId ||
+        typeof stay.roomNumber !== 'string' ||
+        !stay.roomNumber)
+    )
+      throw new Error('Missing guest scope');
 
     if (!channel || !this.auth.systems[subsystem]) throw new Error('Unknown realtime channel');
     if (name.endsWith('transport.status')) this.status.set(subsystem + ':' + name, { data, at: Date.now() });
@@ -160,9 +172,12 @@ export class SharedGateway implements OnGatewayInit, OnModuleDestroy {
       if (
         client.subsystem === subsystem &&
         client.channels.includes(channel) &&
+        (subsystem !== 'foss' ||
+          name === 'guest.refresh' ||
+          (client.session.bookingId === stay?.bookingId && client.session.roomNumber === stay?.roomNumber)) &&
         client.session.expiresAt * 1000 > Date.now()
       )
-        socket.emit(name, data);
+        socket.emit(name, subsystem === 'foss' && name === 'guest.refresh' ? { changed: true } : data);
     }
   }
 

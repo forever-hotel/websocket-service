@@ -6,6 +6,8 @@ export interface LiveSession {
   role: string;
   expiresAt: number;
   channels: LiveChannel[];
+  bookingId?: string;
+  roomNumber?: string;
 }
 
 @Injectable()
@@ -29,6 +31,8 @@ export class SharedAuthService {
         role?: unknown;
         expiresAt?: unknown;
         passwordChangeRequired?: unknown;
+        bookingId?: unknown;
+        roomNumber?: unknown;
       };
 
       if (
@@ -42,7 +46,22 @@ export class SharedAuthService {
         body.passwordChangeRequired !== false
       )
         throw new Error();
-      return { sub: body.sub, role: body.role, expiresAt: body.expiresAt, channels: system.roles[body.role] };
+      if (
+        subsystem === 'foss' &&
+        (body.role !== 'GUEST' ||
+          typeof body.bookingId !== 'string' ||
+          !body.bookingId ||
+          typeof body.roomNumber !== 'string' ||
+          !body.roomNumber)
+      )
+        throw new Error();
+      return {
+        sub: body.sub,
+        role: body.role,
+        expiresAt: body.expiresAt,
+        channels: system.roles[body.role],
+        ...(subsystem === 'foss' ? { bookingId: body.bookingId as string, roomNumber: body.roomNumber as string } : {})
+      };
     } catch {
       throw new UnauthorizedException();
     }

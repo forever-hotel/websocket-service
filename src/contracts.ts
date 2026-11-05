@@ -1,7 +1,9 @@
 export const REALTIME_EXCHANGE = 'hotel.realtime';
-export const channels = ['analytics', 'kitchen', 'rooms', 'tasks', 'stock', 'notifications'] as const;
+export const channels = ['analytics', 'kitchen', 'rooms', 'tasks', 'stock', 'notifications', 'guest'] as const;
 export type LiveChannel = (typeof channels)[number];
 export const eventChannels: Record<string, LiveChannel> = {
+  'guest.event': 'guest',
+  'guest.refresh': 'guest',
   'analytics.changed': 'analytics',
   'analytics.transport.status': 'analytics',
   'food.analytics.changed': 'kitchen',
