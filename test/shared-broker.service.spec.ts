@@ -125,6 +125,26 @@ describe('standalone broker subscription', () => {
     }
   );
 
+  it.each(['menu.changed', 'kitchen.order.changed'])(
+    'refreshes KMS, FOSS and MAD after %s without leaking producer data',
+    async name => {
+      const f = fixture();
+      try {
+        await f.broker.attach();
+        const event = f.message(name, { subsystem: 'kms' });
+        event.fields.routingKey = 'kms.' + name;
+        f.receive(event);
+        expect(f.deliver).toHaveBeenCalledWith('kms', name, { changed: true });
+        expect(f.deliver).toHaveBeenCalledWith('foss', 'guest.refresh', { changed: true });
+        expect(f.deliver).toHaveBeenCalledWith('mad', 'food.analytics.changed', { changed: true });
+        expect(f.channel.ack).toHaveBeenCalledWith(event);
+        expect(JSON.stringify(f.deliver.mock.calls)).not.toContain('never forward');
+      } finally {
+        await f.broker.onModuleDestroy();
+      }
+    }
+  );
+
   it('marks errors unhealthy and schedules a single reconnect after connection loss', async () => {
     const f = fixture();
     try {
