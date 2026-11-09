@@ -93,6 +93,13 @@ export class SharedBroker implements OnModuleInit, OnModuleDestroy {
           }
           if (event.subsystem === 'mad' && event.name === 'notifications.changed')
             this.deliverIfConfigured('foss', 'guest.refresh', { changed: true });
+          if (event.subsystem === 'kms') {
+            this.deliverIfConfigured('foss', 'guest.refresh', { changed: true });
+            this.deliverIfConfigured('mad', 'food.analytics.changed', { changed: true });
+            this.deliverIfConfigured('mad', 'kitchen.order.changed', { changed: true });
+            if (event.name === 'menu.changed')
+              this.deliverIfConfigured('mad', 'stock.alert.changed', { changed: true });
+          }
           channel.ack(message);
         } catch {
           channel.nack(message, false, false);
